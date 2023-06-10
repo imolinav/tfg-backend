@@ -20,6 +20,19 @@ client.connect((err) => {
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
 
+app.get("/api/login", async (req, res) => {
+  console.log("logging in");
+  const q = 'select id, name, last_names as lastName, email, gender from users where email = $1 and password = $2';
+  const values = [req.query.email, req.query.password];
+  const response = await client.query(q, values);
+  res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
+  if (response.rows.length === 0) {
+    res.json({ user: null });
+  } else {
+    res.json({ user: response.rows[0] });
+  }
+})
+
 app.get("/api/home-recommendations", async (req, res) => {
   console.log("retrieving home recommendations");
   const q = 'select c.id, c.name, AVG(replace(e.score, \',\', \'.\')::real) from cities c, entities e where e.city_id = c.id group by c.id, c.name order by avg desc limit 5';
