@@ -47,10 +47,10 @@ app.get("/api/recommendations", async (req, res) => {
   let data = await client.query(q);
   let response = [];
   for (let i = 0; i < data.rows.length; i++) {
-    const attractionsQuery = 'select e.id, e.name, e.score from entities e, cities c, entity_types et  where e.city_id = $1 and et.entity_id = e.id and et.entity_id  not in (select entity_id from entity_types where type = \'Restaurant\') group by e.id order by score desc limit 10';
+    const attractionsQuery = 'select e.id, e.name, replace(e.score, \',\', \'.\')::real as score from entities e, cities c, entity_types et  where e.city_id = $1 and et.entity_id = e.id and et.entity_id  not in (select entity_id from entity_types where type = \'Restaurant\') group by e.id order by score desc limit 10';
     const values = [data.rows[i].id];
     const attractions = await client.query(attractionsQuery, values);
-    const restaurantsQuery = 'select e.id, e.name, e.score from entities e, cities c, entity_types et  where e.city_id = $1 and et.entity_id = e.id and et.entity_id  not in (select entity_id from entity_types where type != \'Restaurant\') group by e.id order by score desc limit 10';
+    const restaurantsQuery = 'select e.id, e.name, replace(e.score, \',\', \'.\')::real as score from entities e, cities c, entity_types et  where e.city_id = $1 and et.entity_id = e.id and et.entity_id  not in (select entity_id from entity_types where type != \'Restaurant\') group by e.id order by score desc limit 10';
     const restaurants = await client.query(restaurantsQuery, values);
     response.push({
       ...data.rows[i],
@@ -62,7 +62,12 @@ app.get("/api/recommendations", async (req, res) => {
   res.json({ recommendations: response });
 });
 
-app.get("/api/recommendations/:user", (req, res) => {});
+app.get("/api/recommendations/:user", async (req, res) => {
+  console.log("retrieving recommendations");
+  
+  res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
+  res.json({ recommendations: 'WIP' });
+});
 
 app.get("/api/planner", async (req, res) => {
   console.log("retrieving cities");
