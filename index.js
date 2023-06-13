@@ -71,19 +71,31 @@ app.get("/api/recommendations/:user", async (req, res) => {
 
 app.get("/api/planner", async (req, res) => {
   console.log("retrieving cities");
-  const q = 'select id, name, latitude, longitude, population, altitude, govern_party from cities';
+  const q = 'select c.id, c.name, AVG(replace(e.score, \',\', \'.\')::real), c.latitude, c.longitude, c.population, c.altitude, c.govern_party from cities c, entities e where e.city_id = c.id group by c.id, c.name order by avg desc';
   const response = await client.query(q);
   res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
   res.json({ cities: response.rows });
 });
 
 app.get("/api/planner/:cityId", async (req, res) => {
-  console.log("retrieving city entities");
-  const q = 'select id, name, score, address from entities where city_id = $1';
+  const q = 'select c.id, c.name, AVG(replace(e.score, \',\', \'.\')::real), c.latitude, c.longitude, c.population, c.altitude, c.govern_party from cities c, entities e where e.city_id = c.id and c.id = $1 group by c.id';
   const values = [req.params.cityId];
-  const response = await client.query(q, values);
+  let data = await client.query(q, values);
+  let response = [];
+  for (let i = 0; i < data.rows.length; i++) {
+    const attractionsQuery = 'select e.id, e.name, replace(e.score, \',\', \'.\')::real as score from entities e, cities c, entity_types et  where e.city_id = $1 and et.entity_id = e.id and et.entity_id  not in (select entity_id from entity_types where type = \'Restaurant\') group by e.id order by score desc';
+    const values = [req.params.cityId];
+    const attractions = await client.query(attractionsQuery, values);
+    const restaurantsQuery = 'select e.id, e.name, replace(e.score, \',\', \'.\')::real as score from entities e, cities c, entity_types et  where e.city_id = $1 and et.entity_id = e.id and et.entity_id  not in (select entity_id from entity_types where type != \'Restaurant\') group by e.id order by score desc';
+    const restaurants = await client.query(restaurantsQuery, values);
+    response.push({
+      ...data.rows[i],
+      attractions: attractions.rows,
+      restaurants: restaurants.rows
+    })
+  }
   res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
-  res.json({ city: response.rows });
+  res.json({ city: response[0] });
 });
 
 app.listen(port, () => console.log(`API listening in port ${port}`));
