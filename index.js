@@ -1,5 +1,6 @@
 const express = require("express");
 const app = express();
+const cors = require('cors');
 const bodyParser = require("body-parser");
 const router = require("express").Router();
 const { Client } = require("pg");
@@ -19,13 +20,13 @@ client.connect((err) => {
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(cors({ origin: 'http://localhost:4200' }));
 
 app.get("/api/login", async (req, res) => {
   console.log("logging in");
   const q = 'select id, name, last_names as lastName, email, gender from users where email = $1 and password = $2';
   const values = [req.query.email, req.query.password];
   const response = await client.query(q, values);
-  res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
   if (response.rows.length === 0) {
     res.json({ user: null });
   } else {
@@ -37,7 +38,6 @@ app.get("/api/home-recommendations", async (req, res) => {
   console.log("retrieving home recommendations");
   const q = 'select c.id, c.name, AVG(replace(e.score, \',\', \'.\')::real) from cities c, entities e where e.city_id = c.id group by c.id, c.name order by avg desc limit 5';
   const response = await client.query(q);
-  res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
   res.json({ recommendations: response.rows });
 });
 
@@ -58,14 +58,12 @@ app.get("/api/recommendations", async (req, res) => {
       restaurants: restaurants.rows
     })
   }
-  res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
   res.json({ recommendations: response });
 });
 
 app.get("/api/recommendations/:user", async (req, res) => {
   console.log("retrieving recommendations");
   
-  res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
   res.json({ recommendations: 'WIP' });
 });
 
@@ -73,7 +71,6 @@ app.get("/api/planner", async (req, res) => {
   console.log("retrieving cities");
   const q = 'select c.id, c.name, AVG(replace(e.score, \',\', \'.\')::real), c.latitude, c.longitude, c.population, c.altitude, c.govern_party from cities c, entities e where e.city_id = c.id group by c.id, c.name order by avg desc';
   const response = await client.query(q);
-  res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
   res.json({ cities: response.rows });
 });
 
@@ -94,8 +91,22 @@ app.get("/api/planner/:cityId", async (req, res) => {
       restaurants: restaurants.rows
     })
   }
-  res.set('Access-Control-Allow-Origin', 'http://localhost:4200');
   res.json({ city: response[0] });
+});
+
+app.post("/api/score/:attractionId", async (req, res) => {
+  const preq = 'select * from user_has_seen_entity where user_id = $1 and entity_id = $2';
+  const prevalues = [req.body.userId, req.params.attractionId];
+  const exists = await client.query(preq, prevalues);
+  let q = '';
+  if (exists) {
+    q = 'update user_has_seen_entity set score = $3 where user_id = $1 and entity_id = $2';
+  } else {
+    q = 'insert into user_has_seen_entity values ($1, $2, $3)';
+  }
+  const values = [req.body.userId, req.params.attractionId, req.body.score];
+  const response = await client.query(q, values);
+  res.json({ data: response[0] });
 });
 
 app.listen(port, () => console.log(`API listening in port ${port}`));
