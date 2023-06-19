@@ -4,6 +4,7 @@ const cors = require('cors');
 const bodyParser = require("body-parser");
 const router = require("express").Router();
 const { Client } = require("pg");
+const { spawn } = require("child_process");
 
 const port = process.env.PORT || 8080;
 const client = new Client({
@@ -63,8 +64,25 @@ app.get("/api/recommendations", async (req, res) => {
 
 app.get("/api/recommendations/:user", async (req, res) => {
   console.log("retrieving recommendations");
-  
-  res.json({ recommendations: 'WIP' });
+
+  const userQ = 'select e.id, e.name, replace(e.score, \',\', \'.\')::real as score, e.city_id from entities e, user_has_seen_entity u where u.user_id = $1 and u.entity_id = e.id';
+  const userValues = [req.params.user];
+  const userResponse = await client.query(userQ, userValues);
+  const userData = userResponse.rows;
+
+  const entitiesQ = 'select e.id, e.name, replace(e.score, \',\', \'.\')::real as score, e.city_id from entities e';
+  const entitiesResponse = await client.query(entitiesQ);
+  const entitiesData = entitiesResponse.rows;
+
+  const pythonProcess = spawn('python', ['script.py', JSON.stringify(userData)]);
+  pythonProcess.stdout.on('data', (data) => {
+    console.log('stdout', data.toString());
+  });
+  pythonProcess.stderr.on('error', (error) => {
+    console.log('stderr', error);
+  });
+
+  res.json({ entities: entitiesData, user: userData });
 });
 
 app.get("/api/planner", async (req, res) => {
